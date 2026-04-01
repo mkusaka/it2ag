@@ -69,23 +69,27 @@ class AgentMonitorServer:
             )
 
     async def _monitor_keystroke(self) -> None:
-        """Monitor for Cmd+Shift+B to send focus event to WebView via SSE."""
+        """Monitor for Cmd+Shift+F to send focus event to WebView via SSE."""
         pattern = iterm2.keyboard.KeystrokePattern()  # type: ignore[no-untyped-call]
         pattern.required_modifiers = [
             iterm2.keyboard.Modifier.COMMAND,
             iterm2.keyboard.Modifier.SHIFT,
         ]
-        pattern.characters = ["b"]
+        pattern.characters = ["f"]
 
-        async with iterm2.keyboard.KeystrokeMonitor(self.connection) as monitor:
-            while True:
-                keystroke = await monitor.async_get()
-                if (
-                    keystroke.characters == "b"
-                    and iterm2.keyboard.Modifier.COMMAND in keystroke.modifiers
-                    and iterm2.keyboard.Modifier.SHIFT in keystroke.modifiers
-                ):
-                    await self._broadcast_sse("focus-search")
+        try:
+            async with iterm2.keyboard.KeystrokeMonitor(self.connection) as monitor:
+                while True:
+                    keystroke = await monitor.async_get()
+                    if (
+                        keystroke.characters == "f"
+                        and iterm2.keyboard.Modifier.COMMAND in keystroke.modifiers
+                        and iterm2.keyboard.Modifier.SHIFT in keystroke.modifiers
+                    ):
+                        await self._ensure_toolbelt_visible()
+                        await self._broadcast_sse("focus-search")
+        except Exception as e:
+            print(f"it2ag: keystroke monitor error: {e}")
 
     async def _broadcast_sse(self, event: str) -> None:
         """Send an SSE event to all connected WebView clients."""
