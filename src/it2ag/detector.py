@@ -127,12 +127,36 @@ def _detect_claude_state(table: dict[int, ProcessInfo], pid: int) -> AgentState:
     return AgentState.IDLE
 
 
+# Processes that codex always has as children (MCP servers, etc.)
+# These do NOT indicate an active turn.
+_CODEX_BACKGROUND_PROCESSES = frozenset(
+    {
+        "npm",
+        "node",
+        "mcp-server-darwin-arm64",
+        "mcp-server-linux-x64",
+    }
+)
+
+
+def _is_codex_background_process(comm: str) -> bool:
+    """Check if a process is a known codex background/MCP process."""
+    name = _comm_basename(comm)
+    if name in _CODEX_BACKGROUND_PROCESSES:
+        return True
+    # Pencil MCP server and similar full-path binaries
+    return "mcp-server" in comm or "pencil" in comm.lower()
+
+
 def _detect_codex_state(table: dict[int, ProcessInfo], pid: int) -> AgentState:
-    """Codex spawns sandbox-exec (macOS) or bwrap (Linux) when executing commands."""
-    descendants = _get_descendants(table, pid)
-    for d in descendants:
-        name = _comm_basename(d.comm)
-        if name in ("sandbox-exec", "bwrap", "codex-linux-sandbox"):
+    """Detect codex running state by checking for non-background child processes.
+
+    Codex always has MCP server children (npm, pencil, etc.). When executing
+    a turn, it spawns additional processes (sandbox-exec, shell commands, etc.).
+    """
+    children = [p for p in table.values() if p.ppid == pid]
+    for child in children:
+        if not _is_codex_background_process(child.comm):
             return AgentState.RUNNING
     return AgentState.IDLE
 

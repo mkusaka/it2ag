@@ -229,16 +229,28 @@ class TestDetectCodexState:
         )
         assert _detect_codex_state(table, 20) == AgentState.RUNNING
 
-    def test_running_with_linux_sandbox(self) -> None:
+    def test_running_with_shell_command(self) -> None:
+        """Codex can run commands without sandbox-exec."""
         table = _make_table(
             [
                 (20, 10, "codex"),
-                (30, 20, "codex-linux-sandbox"),
+                (30, 20, "npm"),  # MCP background
+                (40, 20, "sleep"),  # actual command
             ]
         )
         assert _detect_codex_state(table, 20) == AgentState.RUNNING
 
-    def test_idle_without_sandbox(self) -> None:
+    def test_running_with_any_non_background_child(self) -> None:
+        table = _make_table(
+            [
+                (20, 10, "codex"),
+                (30, 20, "npm"),
+                (40, 20, "python"),
+            ]
+        )
+        assert _detect_codex_state(table, 20) == AgentState.RUNNING
+
+    def test_idle_without_children(self) -> None:
         table = _make_table(
             [
                 (20, 10, "codex"),
@@ -246,11 +258,32 @@ class TestDetectCodexState:
         )
         assert _detect_codex_state(table, 20) == AgentState.IDLE
 
-    def test_idle_with_non_sandbox_children(self) -> None:
+    def test_idle_with_only_mcp_children(self) -> None:
+        table = _make_table(
+            [
+                (20, 10, "codex"),
+                (30, 20, "npm"),
+                (40, 20, "npm"),
+                (50, 20, "/path/to/mcp-server-darwin-arm64"),
+            ]
+        )
+        assert _detect_codex_state(table, 20) == AgentState.IDLE
+
+    def test_idle_with_node_children(self) -> None:
         table = _make_table(
             [
                 (20, 10, "codex"),
                 (30, 20, "node"),
+            ]
+        )
+        assert _detect_codex_state(table, 20) == AgentState.IDLE
+
+    def test_idle_with_pencil_mcp(self) -> None:
+        table = _make_table(
+            [
+                (20, 10, "codex"),
+                (30, 20, "/Applications/Pencil.app/Contents/Resources/out/mcp-server-darwin-arm64"),
+                (40, 20, "npm"),
             ]
         )
         assert _detect_codex_state(table, 20) == AgentState.IDLE
