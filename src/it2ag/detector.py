@@ -231,6 +231,8 @@ def get_git_info(path: str) -> GitInfo:
         if common_dir != Path(repo.git_dir).resolve():
             # This is a worktree; common_dir is the main repo's .git
             root_repo = str(common_dir.parent)
+            # Use the main repo's name, not the worktree directory name
+            repo_name = os.path.basename(root_repo)
 
         return GitInfo(repo=repo_name, branch=branch, root_repo=root_repo)
     except Exception:
