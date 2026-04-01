@@ -7,7 +7,7 @@ Displays a real-time dashboard in iTerm2's Toolbelt sidebar showing all running 
 ## Features
 
 - **Agent detection** — Detects Claude Code and Codex processes via process tree inspection
-- **Running/idle status** — Claude Code: `caffeinate` child process; Codex: `sandbox-exec`/`bwrap` child or IOKit power assertion
+- **Running/idle status** — Claude Code: `caffeinate` child process; Codex: per-PID IOKit power assertion (`pmset`) + `sandbox-exec`/`bwrap` fast path
 - **Git info** — Shows repo name and branch for each session
 - **Repo grouping** — Groups sessions by root repository (worktree-aware via `git rev-parse --git-common-dir`)
 - **Click to focus** — Click a session entry to switch to that iTerm2 pane
@@ -24,15 +24,27 @@ Displays a real-time dashboard in iTerm2's Toolbelt sidebar showing all running 
 
 ## Installation
 
+### Run directly from the git repo (no install needed)
+
+```bash
+uvx --from git+https://github.com/mkusaka/it2ag.git it2ag
+```
+
+### Or clone and run locally
+
 ```bash
 git clone https://github.com/mkusaka/it2ag.git
 cd it2ag
-uv sync
+uv run it2ag
 ```
 
 ## Usage
 
 ```bash
+# If installed via uvx
+it2ag
+
+# Or from the cloned repo
 uv run it2ag
 ```
 
@@ -65,7 +77,10 @@ EOF
 1. A local [aiohttp](https://docs.aiohttp.org/) web server serves an HTML dashboard
 2. The dashboard is registered as an iTerm2 Toolbelt WebView tool via the [Python API](https://iterm2.com/python-api/)
 3. Agent detection scans the process tree (`ps -eo pid,ppid,comm`) to find `claude`/`codex` processes and maps them to iTerm2 sessions
-4. Git info is resolved per-session using `git rev-parse`, with worktree support via `--git-common-dir`
+4. Running state detection:
+   - **Claude Code**: checks for `caffeinate` child process (spawned during active turns)
+   - **Codex**: parses `pmset -g assertions` for per-PID IOKit power assertions (`"Codex is running an active turn"`), with `sandbox-exec`/`bwrap` child check as a fast path. Works with all sandbox modes including `danger-full-access`
+5. Git info is resolved per-session using [GitPython](https://github.com/gitpython-developers/GitPython), with worktree grouping via `common_dir`
 
 ## Development
 
