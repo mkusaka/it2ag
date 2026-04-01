@@ -59,8 +59,10 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
     border-left: 3px solid #808080;
     cursor: pointer;
     transition: background 0.15s;
+    outline: none;
   }
-  .agent:hover { background: #383838; }
+  .agent:hover, .agent.focused { background: #383838; }
+  .agent.focused { outline: 1px solid #569cd6; }
   .agent.running { border-left-color: #4ec9b0; }
   .agent.idle { border-left-color: #555; }
   .agent-top {
@@ -111,6 +113,61 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
 
   <script>
     let allSessions = [];
+    let focusedIndex = -1;
+
+    // Auto-focus search input when the Toolbelt panel gets focus
+    window.addEventListener('focus', () => {
+      document.getElementById('search').focus();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      const items = getAgentElements();
+      const search = document.getElementById('search');
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (items.length === 0) return;
+        focusedIndex = Math.min(focusedIndex + 1, items.length - 1);
+        updateFocus(items);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (focusedIndex <= 0) {
+          // Go back to search box
+          focusedIndex = -1;
+          clearFocus(items);
+          search.focus();
+        } else {
+          focusedIndex--;
+          updateFocus(items);
+        }
+      } else if (e.key === 'Enter' && focusedIndex >= 0 && focusedIndex < items.length) {
+        e.preventDefault();
+        items[focusedIndex].click();
+      } else if (e.key === 'Escape') {
+        focusedIndex = -1;
+        clearFocus(items);
+        search.focus();
+        search.select();
+      }
+    });
+
+    function getAgentElements() {
+      return [...document.querySelectorAll('.agent')];
+    }
+
+    function updateFocus(items) {
+      clearFocus(items);
+      if (focusedIndex >= 0 && focusedIndex < items.length) {
+        items[focusedIndex].classList.add('focused');
+        items[focusedIndex].scrollIntoView({ block: 'nearest' });
+        // Remove focus from search so arrow keys don't move cursor
+        document.getElementById('search').blur();
+      }
+    }
+
+    function clearFocus(items) {
+      for (const el of items) el.classList.remove('focused');
+    }
 
     async function loadSessions() {
       try {
@@ -131,6 +188,7 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
               v => v && v.toLowerCase().includes(q)
             ))
         : allSessions;
+      focusedIndex = -1;
       renderSessions(filtered);
     }
 
@@ -192,7 +250,8 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
         const pathLine = s.path
           ? `<div class="path">${esc(s.path)}</div>`
           : '';
-        return `<div class="agent ${cls}" onclick="focusSession('${s.id}')">
+        return `<div class="agent ${cls}" data-session="${s.id}"
+                     onclick="focusSession('${s.id}')">
           <div class="agent-top">
             <span class="status">${icon} ${label}</span>
             ${typeBadge}
@@ -227,6 +286,9 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
 
     loadSessions();
     setInterval(loadSessions, 3000);
+
+    // Focus search on initial load
+    document.getElementById('search').focus();
   </script>
 </body>
 </html>"""
