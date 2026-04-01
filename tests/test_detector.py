@@ -17,6 +17,7 @@ from it2ag.detector import (
     _detect_codex_state,
     _find_ancestor_pid,
     _get_children,
+    _get_codex_active_pids,
     _get_descendants,
     _is_agent_process,
     _is_claude_process,
@@ -229,28 +230,16 @@ class TestDetectCodexState:
         )
         assert _detect_codex_state(table, 20) == AgentState.RUNNING
 
-    def test_running_with_shell_command(self) -> None:
-        """Codex can run commands without sandbox-exec."""
+    def test_running_with_linux_sandbox(self) -> None:
         table = _make_table(
             [
                 (20, 10, "codex"),
-                (30, 20, "npm"),  # MCP background
-                (40, 20, "sleep"),  # actual command
+                (30, 20, "codex-linux-sandbox"),
             ]
         )
         assert _detect_codex_state(table, 20) == AgentState.RUNNING
 
-    def test_running_with_any_non_background_child(self) -> None:
-        table = _make_table(
-            [
-                (20, 10, "codex"),
-                (30, 20, "npm"),
-                (40, 20, "python"),
-            ]
-        )
-        assert _detect_codex_state(table, 20) == AgentState.RUNNING
-
-    def test_idle_without_children(self) -> None:
+    def test_idle_without_sandbox(self) -> None:
         table = _make_table(
             [
                 (20, 10, "codex"),
@@ -258,50 +247,9 @@ class TestDetectCodexState:
         )
         assert _detect_codex_state(table, 20) == AgentState.IDLE
 
-    def test_idle_with_only_mcp_children(self) -> None:
-        table = _make_table(
-            [
-                (20, 10, "codex"),
-                (30, 20, "npm"),
-                (40, 20, "npm"),
-                (50, 20, "/path/to/mcp-server-darwin-arm64"),
-            ]
-        )
-        assert _detect_codex_state(table, 20) == AgentState.IDLE
-
-    def test_idle_with_node_children(self) -> None:
-        table = _make_table(
-            [
-                (20, 10, "codex"),
-                (30, 20, "node"),
-            ]
-        )
-        assert _detect_codex_state(table, 20) == AgentState.IDLE
-
-    def test_idle_with_pencil_mcp(self) -> None:
-        table = _make_table(
-            [
-                (20, 10, "codex"),
-                (30, 20, "/Applications/Pencil.app/Contents/Resources/out/mcp-server-darwin-arm64"),
-                (40, 20, "npm"),
-            ]
-        )
-        assert _detect_codex_state(table, 20) == AgentState.IDLE
-
-    def test_idle_with_npm_exec_mcp(self) -> None:
-        """npm exec with MCP server args should be treated as background."""
-        table = _make_table(
-            [
-                (20, 10, "codex"),
-                (30, 20, "npm exec freee-mcp"),
-                (40, 20, "npm exec @playwright/mcp@latest --cdp-endpoint http://127.0.0.1:9222"),
-                (50, 20, "npm exec chrome-devtools-mcp@latest"),
-            ]
-        )
-        assert _detect_codex_state(table, 20) == AgentState.IDLE
-
-    def test_running_with_npm_exec_mcp_plus_command(self) -> None:
-        """If there's a real command alongside npm exec MCP servers, it's running."""
+    def test_idle_with_non_sandbox_children(self) -> None:
+        """Non-sandbox children don't affect _detect_codex_state directly.
+        IOKit assertion check in detect_agents handles the running detection."""
         table = _make_table(
             [
                 (20, 10, "codex"),
@@ -309,12 +257,66 @@ class TestDetectCodexState:
                 (40, 20, "sleep"),
             ]
         )
-        assert _detect_codex_state(table, 20) == AgentState.RUNNING
+        # _detect_codex_state only checks for sandbox-exec descendants
+        assert _detect_codex_state(table, 20) == AgentState.IDLE
+
+
+class TestGetCodexActivePids:
+    def test_parses_active_pid(self) -> None:
+        pmset_output = (
+            "Listed by owning process:\n"
+            "   pid 90513(codex-aarch64-apple-darwin): [0x0004055400018f9a]"
+            " 00:00:10 PreventUserIdleSystemSleep"
+            ' named: "Codex is running an active turn"\n'
+            "   pid 384(powerd): [0x0003db9300018771]"
+            " 02:55:59 PreventUserIdleSystemSleep"
+            ' named: "Powerd - Prevent sleep while display is on"\n'
+        )
+        with patch("it2ag.detector.subprocess.run") as mock_run:
+            mock_run.return_value.returncode = 0
+            mock_run.return_value.stdout = pmset_output
+            pids = _get_codex_active_pids()
+        assert pids == {90513}
+
+    def test_multiple_active_codex(self) -> None:
+        pmset_output = (
+            "   pid 100(codex-aarch64-apple-darwin): [0x01]"
+            " 00:00:05 PreventUserIdleSystemSleep"
+            ' named: "Codex is running an active turn"\n'
+            "   pid 200(codex-aarch64-apple-darwin): [0x02]"
+            " 00:00:03 PreventUserIdleSystemSleep"
+            ' named: "Codex is running an active turn"\n'
+        )
+        with patch("it2ag.detector.subprocess.run") as mock_run:
+            mock_run.return_value.returncode = 0
+            mock_run.return_value.stdout = pmset_output
+            pids = _get_codex_active_pids()
+        assert pids == {100, 200}
+
+    def test_no_active_codex(self) -> None:
+        pmset_output = (
+            "   pid 384(powerd): [0x01]"
+            " 02:55:59 PreventUserIdleSystemSleep"
+            ' named: "Powerd - Prevent sleep while display is on"\n'
+        )
+        with patch("it2ag.detector.subprocess.run") as mock_run:
+            mock_run.return_value.returncode = 0
+            mock_run.return_value.stdout = pmset_output
+            pids = _get_codex_active_pids()
+        assert pids == set()
+
+    def test_pmset_failure(self) -> None:
+        with patch("it2ag.detector.subprocess.run") as mock_run:
+            mock_run.return_value.returncode = 1
+            mock_run.return_value.stdout = ""
+            pids = _get_codex_active_pids()
+        assert pids == set()
 
 
 class TestDetectAgents:
+    @patch("it2ag.detector._get_codex_active_pids", return_value=set())
     @patch("it2ag.detector._build_process_table")
-    def test_finds_claude_and_codex(self, mock_table: object) -> None:
+    def test_finds_claude_and_codex(self, mock_table: object, mock_pids: object) -> None:
         mock_table.return_value = _make_table(  # type: ignore[union-attr]
             [
                 (1, 0, "init"),
@@ -335,8 +337,9 @@ class TestDetectAgents:
         assert len(codex_agents) == 1
         assert codex_agents[0].state == AgentState.RUNNING
 
+    @patch("it2ag.detector._get_codex_active_pids", return_value=set())
     @patch("it2ag.detector._build_process_table")
-    def test_filters_by_session_pids(self, mock_table: object) -> None:
+    def test_filters_by_session_pids(self, mock_table: object, mock_pids: object) -> None:
         mock_table.return_value = _make_table(  # type: ignore[union-attr]
             [
                 (1, 0, "init"),
@@ -352,8 +355,9 @@ class TestDetectAgents:
         assert agents[0].agent_type == AgentType.CLAUDE
         assert agents[0].session_pid == 10
 
+    @patch("it2ag.detector._get_codex_active_pids", return_value=set())
     @patch("it2ag.detector._build_process_table")
-    def test_no_agents(self, mock_table: object) -> None:
+    def test_no_agents(self, mock_table: object, mock_pids: object) -> None:
         mock_table.return_value = _make_table(  # type: ignore[union-attr]
             [
                 (1, 0, "init"),
@@ -363,6 +367,43 @@ class TestDetectAgents:
         )
         agents = detect_agents()
         assert agents == []
+
+    @patch("it2ag.detector._get_codex_active_pids", return_value={50})
+    @patch("it2ag.detector._build_process_table")
+    def test_codex_running_via_iokit_assertion(self, mock_table: object, mock_pids: object) -> None:
+        """Codex with IOKit assertion should be running even without sandbox children."""
+        mock_table.return_value = _make_table(  # type: ignore[union-attr]
+            [
+                (1, 0, "init"),
+                (10, 1, "bash"),
+                (50, 10, "codex"),
+                (60, 50, "npm exec freee-mcp"),
+            ]
+        )
+        agents = detect_agents()
+        assert len(agents) == 1
+        assert agents[0].agent_type == AgentType.CODEX
+        assert agents[0].state == AgentState.RUNNING
+
+    @patch("it2ag.detector._get_codex_active_pids", return_value={50})
+    @patch("it2ag.detector._build_process_table")
+    def test_only_active_codex_is_running(self, mock_table: object, mock_pids: object) -> None:
+        """Only the codex PID in the assertion set should be running."""
+        mock_table.return_value = _make_table(  # type: ignore[union-attr]
+            [
+                (1, 0, "init"),
+                (10, 1, "bash"),
+                (50, 10, "codex"),  # active (in assertion set)
+                (70, 1, "zsh"),
+                (80, 70, "codex"),  # idle (not in assertion set)
+            ]
+        )
+        agents = detect_agents()
+        assert len(agents) == 2
+        active = next(a for a in agents if a.pid == 50)
+        idle = next(a for a in agents if a.pid == 80)
+        assert active.state == AgentState.RUNNING
+        assert idle.state == AgentState.IDLE
 
 
 class TestGetGitInfo:

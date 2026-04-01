@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import subprocess
 from dataclasses import dataclass
@@ -127,45 +128,52 @@ def _detect_claude_state(table: dict[int, ProcessInfo], pid: int) -> AgentState:
     return AgentState.IDLE
 
 
-# Processes that codex always has as children (MCP servers, etc.)
-# These do NOT indicate an active turn.
-_CODEX_BACKGROUND_PROCESSES = frozenset(
-    {
-        "npm",
-        "node",
-        "mcp-server-darwin-arm64",
-        "mcp-server-linux-x64",
-    }
-)
+def _get_codex_active_pids() -> set[int]:
+    """Get PIDs of codex processes that are actively running a turn.
 
-
-def _is_codex_background_process(comm: str) -> bool:
-    """Check if a process is a known codex background/MCP process.
-
-    On macOS, ps -eo comm may include arguments (e.g. "npm exec freee-mcp"),
-    so we check both the base command name and common MCP patterns.
+    Parses macOS `pmset -g assertions` output which includes per-process
+    IOKit power assertions. Codex creates an assertion with the reason
+    "Codex is running an active turn" when executing a turn.
     """
-    # Get just the command name (first token, then basename)
-    first_token = comm.split()[0] if comm.strip() else ""
-    name = os.path.basename(first_token)
-    if name in _CODEX_BACKGROUND_PROCESSES:
-        return True
-    # MCP servers launched via "npm exec <name>"
-    if comm.startswith("npm exec") or comm.startswith("npx "):
-        return True
-    # Pencil MCP server and similar full-path binaries
-    return "mcp-server" in comm or "pencil" in comm.lower()
+    try:
+        result = subprocess.run(
+            ["pmset", "-g", "assertions"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        if result.returncode != 0:
+            return set()
+    except Exception:
+        return set()
+
+    active_pids: set[int] = set()
+    lines = result.stdout.splitlines()
+    for line in lines:
+        # Lines look like: "   pid 90513(codex-aarch64-apple-darwin): [0x...] ... named: "...""
+        if "Codex is running an active turn" in line:
+            # Extract PID from "pid NNNN(" pattern
+            for part in line.split():
+                if part.startswith("pid"):
+                    continue
+                # The token after "pid" is "NNNN(name):"
+                paren = part.find("(")
+                if paren > 0:
+                    with contextlib.suppress(ValueError):
+                        active_pids.add(int(part[:paren]))
+                    break
+    return active_pids
 
 
 def _detect_codex_state(table: dict[int, ProcessInfo], pid: int) -> AgentState:
-    """Detect codex running state by checking for non-background child processes.
+    """Detect codex running state via sandbox child processes.
 
-    Codex always has MCP server children (npm, pencil, etc.). When executing
-    a turn, it spawns additional processes (sandbox-exec, shell commands, etc.).
+    Falls back to IOKit assertion check via detect_agents for batch detection.
     """
-    children = [p for p in table.values() if p.ppid == pid]
-    for child in children:
-        if not _is_codex_background_process(child.comm):
+    descendants = _get_descendants(table, pid)
+    for d in descendants:
+        name = _comm_basename(d.comm)
+        if name in ("sandbox-exec", "bwrap", "codex-linux-sandbox"):
             return AgentState.RUNNING
     return AgentState.IDLE
 
@@ -179,6 +187,8 @@ def detect_agents(session_pids: set[int] | None = None) -> list[AgentInfo]:
     """
     table = _build_process_table()
     agents: list[AgentInfo] = []
+    # Batch-fetch codex active PIDs from IOKit assertions (one pmset call)
+    codex_active_pids = _get_codex_active_pids()
 
     for proc in table.values():
         if not _is_agent_process(proc.comm):
@@ -190,6 +200,9 @@ def detect_agents(session_pids: set[int] | None = None) -> list[AgentInfo]:
         else:
             agent_type = AgentType.CODEX
             state = _detect_codex_state(table, proc.pid)
+            # IOKit assertion is per-PID and authoritative
+            if proc.pid in codex_active_pids:
+                state = AgentState.RUNNING
 
         session_pid: int | None = None
         if session_pids:
