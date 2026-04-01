@@ -69,20 +69,20 @@ class AgentMonitorServer:
             )
 
     async def _monitor_keystroke(self) -> None:
-        """Monitor for Cmd+Shift+F to send focus event to WebView via SSE."""
+        """Monitor for Cmd+Shift+A to send focus event to WebView via SSE."""
         pattern = iterm2.keyboard.KeystrokePattern()  # type: ignore[no-untyped-call]
         pattern.required_modifiers = [
             iterm2.keyboard.Modifier.COMMAND,
             iterm2.keyboard.Modifier.SHIFT,
         ]
-        pattern.characters = ["f"]
+        pattern.characters = ["a"]
 
         try:
             async with iterm2.keyboard.KeystrokeMonitor(self.connection) as monitor:
                 while True:
                     keystroke = await monitor.async_get()
                     if (
-                        keystroke.characters == "f"
+                        keystroke.characters == "a"
                         and iterm2.keyboard.Modifier.COMMAND in keystroke.modifiers
                         and iterm2.keyboard.Modifier.SHIFT in keystroke.modifiers
                     ):
