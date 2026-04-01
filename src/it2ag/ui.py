@@ -299,6 +299,23 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
     loadSessions();
     setInterval(loadSessions, 3000);
 
+    // SSE: listen for focus events from the Python side (Cmd+Shift+B)
+    function connectSSE() {
+      const es = new EventSource('/api/events');
+      es.addEventListener('focus-search', () => {
+        const search = document.getElementById('search');
+        search.focus();
+        search.select();
+        focusedIndex = -1;
+        clearFocus(getAgentElements());
+      });
+      es.onerror = () => {
+        es.close();
+        setTimeout(connectSSE, 3000);
+      };
+    }
+    connectSSE();
+
     // Focus search on initial load
     document.getElementById('search').focus();
   </script>

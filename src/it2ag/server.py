@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
+import weakref
 
 import iterm2
 import iterm2.app
 import iterm2.connection
+import iterm2.keyboard
 import iterm2.mainmenu
 import iterm2.session
 import iterm2.tool
@@ -26,12 +29,14 @@ class AgentMonitorServer:
     def __init__(self, connection: iterm2.connection.Connection, port: int = DEFAULT_PORT) -> None:
         self.connection = connection
         self.port = port
+        self._sse_clients: weakref.WeakSet[web.StreamResponse] = weakref.WeakSet()
 
     async def start(self) -> None:
         app = web.Application()
         app.router.add_get("/", self._handle_index)
         app.router.add_get("/api/sessions", self._handle_sessions)
         app.router.add_get("/api/focus", self._handle_focus)
+        app.router.add_get("/api/events", self._handle_sse)
 
         runner = web.AppRunner(app)
         await runner.setup()
@@ -47,6 +52,7 @@ class AgentMonitorServer:
         )
 
         await self._ensure_toolbelt_visible()
+        self._keystroke_task = asyncio.ensure_future(self._monitor_keystroke())
 
     async def _ensure_toolbelt_visible(self) -> None:
         """Show the Toolbelt panel if it's not already visible."""
@@ -61,6 +67,56 @@ class AgentMonitorServer:
                 self.connection,
                 _SHOW_TOOLBELT_ID,
             )
+
+    async def _monitor_keystroke(self) -> None:
+        """Monitor for Cmd+Shift+B to send focus event to WebView via SSE."""
+        pattern = iterm2.keyboard.KeystrokePattern()  # type: ignore[no-untyped-call]
+        pattern.required_modifiers = [
+            iterm2.keyboard.Modifier.COMMAND,
+            iterm2.keyboard.Modifier.SHIFT,
+        ]
+        pattern.characters = ["b"]
+
+        async with iterm2.keyboard.KeystrokeMonitor(self.connection) as monitor:
+            while True:
+                keystroke = await monitor.async_get()
+                if (
+                    keystroke.characters == "b"
+                    and iterm2.keyboard.Modifier.COMMAND in keystroke.modifiers
+                    and iterm2.keyboard.Modifier.SHIFT in keystroke.modifiers
+                ):
+                    await self._broadcast_sse("focus-search")
+
+    async def _broadcast_sse(self, event: str) -> None:
+        """Send an SSE event to all connected WebView clients."""
+        dead: list[web.StreamResponse] = []
+        for client in self._sse_clients:
+            try:
+                await client.write(f"event: {event}\ndata: {{}}\n\n".encode())
+            except Exception:
+                dead.append(client)
+        for d in dead:
+            self._sse_clients.discard(d)
+
+    async def _handle_sse(self, request: web.Request) -> web.StreamResponse:
+        """SSE endpoint for pushing events to the WebView."""
+        response = web.StreamResponse()
+        response.content_type = "text/event-stream"
+        response.headers["Cache-Control"] = "no-cache"
+        response.headers["X-Accel-Buffering"] = "no"
+        await response.prepare(request)
+        self._sse_clients.add(response)
+
+        # Keep connection alive
+        try:
+            while True:
+                await asyncio.sleep(30)
+                await response.write(b": keepalive\n\n")
+        except (asyncio.CancelledError, ConnectionResetError):
+            pass
+        finally:
+            self._sse_clients.discard(response)
+        return response
 
     async def _handle_index(self, request: web.Request) -> web.Response:
         return web.Response(text=AGENT_MONITOR_HTML, content_type="text/html")
