@@ -238,8 +238,7 @@ class TestDetectCodexState:
         )
         assert _detect_codex_state(table, 20) == AgentState.RUNNING
 
-    @patch("it2ag.detector._check_codex_power_assertion", return_value=False)
-    def test_idle_without_sandbox(self, mock_assertion: object) -> None:
+    def test_idle_without_sandbox(self) -> None:
         table = _make_table(
             [
                 (20, 10, "codex"),
@@ -247,21 +246,19 @@ class TestDetectCodexState:
         )
         assert _detect_codex_state(table, 20) == AgentState.IDLE
 
-    @patch("it2ag.detector._check_codex_power_assertion", return_value=True)
-    def test_running_via_power_assertion_fallback(self, mock_assertion: object) -> None:
+    def test_idle_with_non_sandbox_children(self) -> None:
         table = _make_table(
             [
                 (20, 10, "codex"),
-                (30, 20, "node"),  # no sandbox child
+                (30, 20, "node"),
             ]
         )
-        assert _detect_codex_state(table, 20) == AgentState.RUNNING
+        assert _detect_codex_state(table, 20) == AgentState.IDLE
 
 
 class TestDetectAgents:
     @patch("it2ag.detector._build_process_table")
-    @patch("it2ag.detector._check_codex_power_assertion", return_value=False)
-    def test_finds_claude_and_codex(self, mock_assertion: object, mock_table: object) -> None:
+    def test_finds_claude_and_codex(self, mock_table: object) -> None:
         mock_table.return_value = _make_table(  # type: ignore[union-attr]
             [
                 (1, 0, "init"),
@@ -283,8 +280,7 @@ class TestDetectAgents:
         assert codex_agents[0].state == AgentState.RUNNING
 
     @patch("it2ag.detector._build_process_table")
-    @patch("it2ag.detector._check_codex_power_assertion", return_value=False)
-    def test_filters_by_session_pids(self, mock_assertion: object, mock_table: object) -> None:
+    def test_filters_by_session_pids(self, mock_table: object) -> None:
         mock_table.return_value = _make_table(  # type: ignore[union-attr]
             [
                 (1, 0, "init"),

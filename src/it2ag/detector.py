@@ -128,30 +128,13 @@ def _detect_claude_state(table: dict[int, ProcessInfo], pid: int) -> AgentState:
 
 
 def _detect_codex_state(table: dict[int, ProcessInfo], pid: int) -> AgentState:
-    """Codex spawns sandbox-exec (macOS) when executing commands."""
+    """Codex spawns sandbox-exec (macOS) or bwrap (Linux) when executing commands."""
     descendants = _get_descendants(table, pid)
     for d in descendants:
         name = _comm_basename(d.comm)
         if name in ("sandbox-exec", "bwrap", "codex-linux-sandbox"):
             return AgentState.RUNNING
-    # Fallback: check IOKit power assertions
-    if _check_codex_power_assertion():
-        return AgentState.RUNNING
     return AgentState.IDLE
-
-
-def _check_codex_power_assertion() -> bool:
-    """Check macOS IOKit power assertions for active Codex turn."""
-    try:
-        result = subprocess.run(
-            ["pmset", "-g", "assertions"],
-            capture_output=True,
-            text=True,
-            timeout=3,
-        )
-        return "Codex is running an active turn" in result.stdout
-    except Exception:
-        return False
 
 
 def detect_agents(session_pids: set[int] | None = None) -> list[AgentInfo]:
