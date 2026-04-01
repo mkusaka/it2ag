@@ -115,10 +115,22 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
     let allSessions = [];
     let focusedIndex = -1;
 
-    // Auto-focus search input when the Toolbelt panel gets focus
+    // Auto-focus search input when the Toolbelt panel gets focus.
+    // Use multiple strategies since embedded WebViews may not fire focus events.
+    let hadFocus = document.hasFocus();
     window.addEventListener('focus', () => {
       document.getElementById('search').focus();
     });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) document.getElementById('search').focus();
+    });
+    setInterval(() => {
+      const hasFocus = document.hasFocus();
+      if (hasFocus && !hadFocus) {
+        document.getElementById('search').focus();
+      }
+      hadFocus = hasFocus;
+    }, 200);
 
     document.addEventListener('keydown', (e) => {
       const items = getAgentElements();
