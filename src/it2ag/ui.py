@@ -49,16 +49,8 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
     padding: 4px 0 2px 0;
     border-bottom: 1px solid #333;
     margin-bottom: 4px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
+    cursor: default;
   }
-  .repo-header .repo-path {
-    color: #6a9955;
-    font-weight: normal;
-    font-size: 10px;
-  }
-
   .agent {
     padding: 5px 8px;
     margin: 3px 0;
@@ -211,14 +203,11 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
         </div>`;
       }).join('');
 
-      const pathHtml = repoPath
-        ? `<span class="repo-path">${esc(repoPath)}</span>`
-        : '';
+      const titleAttr = repoPath ? ` title="${esc(repoPath)}"` : '';
 
       return `<div class="repo-group">
-        <div class="repo-header">
+        <div class="repo-header"${titleAttr}>
           <span>${esc(repoName)}</span>
-          ${pathHtml}
         </div>
         ${sessionsHtml}
       </div>`;
