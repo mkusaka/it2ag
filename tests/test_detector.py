@@ -288,6 +288,29 @@ class TestDetectCodexState:
         )
         assert _detect_codex_state(table, 20) == AgentState.IDLE
 
+    def test_idle_with_npm_exec_mcp(self) -> None:
+        """npm exec with MCP server args should be treated as background."""
+        table = _make_table(
+            [
+                (20, 10, "codex"),
+                (30, 20, "npm exec freee-mcp"),
+                (40, 20, "npm exec @playwright/mcp@latest --cdp-endpoint http://127.0.0.1:9222"),
+                (50, 20, "npm exec chrome-devtools-mcp@latest"),
+            ]
+        )
+        assert _detect_codex_state(table, 20) == AgentState.IDLE
+
+    def test_running_with_npm_exec_mcp_plus_command(self) -> None:
+        """If there's a real command alongside npm exec MCP servers, it's running."""
+        table = _make_table(
+            [
+                (20, 10, "codex"),
+                (30, 20, "npm exec freee-mcp"),
+                (40, 20, "sleep"),
+            ]
+        )
+        assert _detect_codex_state(table, 20) == AgentState.RUNNING
+
 
 class TestDetectAgents:
     @patch("it2ag.detector._build_process_table")

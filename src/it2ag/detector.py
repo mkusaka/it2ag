@@ -140,9 +140,18 @@ _CODEX_BACKGROUND_PROCESSES = frozenset(
 
 
 def _is_codex_background_process(comm: str) -> bool:
-    """Check if a process is a known codex background/MCP process."""
-    name = _comm_basename(comm)
+    """Check if a process is a known codex background/MCP process.
+
+    On macOS, ps -eo comm may include arguments (e.g. "npm exec freee-mcp"),
+    so we check both the base command name and common MCP patterns.
+    """
+    # Get just the command name (first token, then basename)
+    first_token = comm.split()[0] if comm.strip() else ""
+    name = os.path.basename(first_token)
     if name in _CODEX_BACKGROUND_PROCESSES:
+        return True
+    # MCP servers launched via "npm exec <name>"
+    if comm.startswith("npm exec") or comm.startswith("npx "):
         return True
     # Pencil MCP server and similar full-path binaries
     return "mcp-server" in comm or "pencil" in comm.lower()
