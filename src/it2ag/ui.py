@@ -85,6 +85,20 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
   .session-name { color: #d4d4d4; font-size: 11px; margin-top: 2px; }
   .branch { color: #ce9178; font-size: 11px; margin-top: 2px; }
   .path { color: #6a9955; font-size: 10px; margin-top: 1px; }
+  .ref-status {
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: 6px;
+  }
+  .ref-status.pending {
+    background: #4a3a1a;
+    color: #e8b84a;
+  }
+  .ref-status.done {
+    background: #1a3a1a;
+    color: #5a9a5a;
+  }
   .count {
     font-size: 11px;
     color: #808080;
@@ -243,9 +257,11 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
       container.innerHTML = html;
 
       const running = sessions.filter(s => s.agent_state === 'running').length;
+      const pending = sessions.filter(s => s.reference_status === 'pending').length;
       const withAgent = sessions.filter(s => s.agent_type).length;
+      const pendingText = pending > 0 ? ` / ${pending} 確認待ち` : '';
       document.getElementById('count').textContent =
-        `${running} running / ${withAgent} agents / ${sessions.length} sessions`;
+        `${running} running${pendingText} / ${withAgent} agents / ${sessions.length} sessions`;
     }
 
     function renderGroup(repoName, repoPath, items) {
@@ -255,6 +271,11 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
         const label = s.agent_state || 'no agent';
         const typeBadge = s.agent_type
           ? `<span class="agent-type ${s.agent_type}">${s.agent_type}</span>`
+          : '';
+        const refBadge = s.reference_status === 'pending'
+          ? '<span class="ref-status pending">確認待ち</span>'
+          : s.reference_status === 'done'
+          ? '<span class="ref-status done">確認済み</span>'
           : '';
         const branchLine = s.branch
           ? `<div class="branch">${esc(s.branch)}</div>`
@@ -266,7 +287,7 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
                      onclick="focusSession('${s.id}')">
           <div class="agent-top">
             <span class="status">${icon} ${label}</span>
-            ${typeBadge}
+            <span>${refBadge}${typeBadge}</span>
           </div>
           <div class="session-name">${esc(s.name || '(unnamed)')}</div>
           ${branchLine}
@@ -293,6 +314,12 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
     async function focusSession(sessionId) {
       try {
         await fetch('/api/focus?session=' + encodeURIComponent(sessionId));
+        // Update local state immediately so UI reflects "done"
+        const s = allSessions.find(s => s.id === sessionId);
+        if (s && s.reference_status === 'pending') {
+          s.reference_status = 'done';
+          filterSessions();
+        }
       } catch(e) {}
     }
 

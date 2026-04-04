@@ -30,6 +30,10 @@ class AgentMonitorServer:
         self.connection = connection
         self.port = port
         self._sse_clients: weakref.WeakSet[web.StreamResponse] = weakref.WeakSet()
+        # Track reference status: session_id -> whether user has seen it since last idle
+        self._seen_sessions: dict[str, bool] = {}
+        # Track previous agent states: session_id -> previous agent_state value
+        self._prev_states: dict[str, str] = {}
 
     async def start(self) -> None:
         app = web.Application()
@@ -179,6 +183,34 @@ class AgentMonitorServer:
                 }
             )
 
+        # Compute reference_status for each session
+        for s in sessions_info:
+            sid = str(s["id"])
+            state = str(s["agent_state"])
+            prev = self._prev_states.get(sid, "")
+
+            if state == "running":
+                # Running sessions have no reference status
+                s["reference_status"] = ""
+            elif state == "idle":
+                if prev == "running":
+                    # Just transitioned to idle → pending review
+                    self._seen_sessions[sid] = False
+                elif sid not in self._seen_sessions:
+                    # First time seeing this idle session → pending
+                    self._seen_sessions[sid] = False
+                s["reference_status"] = "done" if self._seen_sessions.get(sid, False) else "pending"
+            else:
+                s["reference_status"] = ""
+
+            self._prev_states[sid] = state
+
+        # Clean up stale entries
+        current_ids = {str(s["id"]) for s in sessions_info}
+        for stale in set(self._prev_states) - current_ids:
+            self._prev_states.pop(stale, None)
+            self._seen_sessions.pop(stale, None)
+
         # Sort: agents first (running before idle), then non-agents
         sessions_info.sort(
             key=lambda s: (
@@ -193,6 +225,9 @@ class AgentMonitorServer:
         session_id = request.query.get("session", "")
         if not session_id:
             return web.Response(text="no session id", status=400)
+
+        # Mark as seen when user clicks/focuses
+        self._seen_sessions[session_id] = True
 
         iterm2_app = await iterm2.app.async_get_app(self.connection)
         if iterm2_app is None:
