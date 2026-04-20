@@ -1,6 +1,6 @@
 [project]
 name = "it2ag"
-version = "0.1.0"
+version = "0.0.1"
 description = "iTerm2 agent monitor for Claude Code and Codex"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -27,6 +27,9 @@ dev = [
     "mypy>=1.14",
     "pytest>=8",
     "pytest-asyncio>=0.25",
+]
+release = [
+    "pyinstaller>=6.19,<7",
 ]
 
 [tool.ruff]

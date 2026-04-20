@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Sequence
 
 import iterm2
 import iterm2.connection
 
+from it2ag import __version__
 from it2ag.server import DEFAULT_PORT, AgentMonitorServer
 
 
@@ -18,10 +20,15 @@ async def _run(connection: iterm2.connection.Connection, port: int) -> None:
     print("it2ag: Ctrl+C to stop")
 
 
-def main() -> None:
+def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="it2ag",
         description="iTerm2 agent monitor for Claude Code and Codex",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     parser.add_argument(
         "--port",
@@ -29,7 +36,7 @@ def main() -> None:
         default=DEFAULT_PORT,
         help=f"Port for the local web server (default: {DEFAULT_PORT})",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     try:
         iterm2.run_forever(lambda conn: _run(conn, args.port))  # type: ignore[attr-defined]

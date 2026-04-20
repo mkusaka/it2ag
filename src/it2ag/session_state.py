@@ -17,9 +17,7 @@ class SessionStateTracker:
     def apply(self, sessions: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Decorate sessions with transient UI state derived from state transitions."""
         active_session_ids = {
-            str(session.get("id", ""))
-            for session in sessions
-            if session.get("id") is not None
+            str(session.get("id", "")) for session in sessions if session.get("id") is not None
         }
         next_last_agent_states: dict[str, str] = {}
 

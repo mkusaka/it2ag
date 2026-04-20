@@ -25,13 +25,22 @@ Displays a real-time dashboard in iTerm2's Toolbelt sidebar showing all running 
 
 ## Installation
 
-### Run directly from the git repo (no install needed)
+### Homebrew (single binary)
+
+```bash
+brew tap mkusaka/tap
+brew install mkusaka/tap/it2ag
+```
+
+### `uvx` from GitHub
+
+Run directly from the git repo without cloning:
 
 ```bash
 uvx --from git+https://github.com/mkusaka/it2ag.git it2ag
 ```
 
-### Or clone and run locally
+### Clone and run locally
 
 ```bash
 git clone https://github.com/mkusaka/it2ag.git
@@ -42,7 +51,7 @@ uv run it2ag
 ## Usage
 
 ```bash
-# If installed via uvx
+# If installed via Homebrew or uvx
 it2ag
 
 # Or from the cloned repo
@@ -54,6 +63,7 @@ The Toolbelt panel opens automatically. Click any session to focus it, and click
 ### Options
 
 ```
+--version      Show the installed version and exit
 --port PORT    Port for the local web server (default: 49152)
 ```
 
@@ -65,13 +75,35 @@ Copy or symlink the script to iTerm2's AutoLaunch directory:
 mkdir -p ~/Library/Application\ Support/iTerm2/Scripts/AutoLaunch
 # Create a wrapper script
 cat > ~/Library/Application\ Support/iTerm2/Scripts/AutoLaunch/it2ag.py << 'EOF'
-import subprocess, sys, os
-subprocess.Popen(
-    [os.path.expanduser("~/.local/bin/uv"), "run", "--project",
-     os.path.expanduser("~/src/github.com/mkusaka/it2ag"), "it2ag"],
-)
+import os
+import pathlib
+import shutil
+import subprocess
+
+binary = shutil.which("it2ag")
+if binary is None:
+    for candidate in (
+        "/opt/homebrew/bin/it2ag",
+        "/usr/local/bin/it2ag",
+        os.path.expanduser("~/.local/bin/it2ag"),
+    ):
+        if pathlib.Path(candidate).exists():
+            binary = candidate
+            break
+
+if binary is None:
+    raise SystemExit("it2ag not found. Install it with Homebrew or add it to PATH.")
+
+subprocess.Popen([binary])
 EOF
 ```
+
+## Release
+
+1. Update `version` in `pyproject.toml` and `src/it2ag/__init__.py`.
+2. Commit the release changes and push them to `main`.
+3. Create and push a `vX.Y.Z` tag.
+4. The `Release` workflow builds single-file macOS binaries for Apple Silicon and Intel, publishes them to GitHub Releases, and dispatches a formula update to `mkusaka/homebrew-tap`.
 
 ## How it works
 
