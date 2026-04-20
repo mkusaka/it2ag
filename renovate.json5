@@ -1,9 +1,30 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^pyproject\\.toml$/"
+      ],
+      "matchStrings": [
+        "required-version = \"==(?<currentValue>[^\"]+)\""
+      ],
+      "depNameTemplate": "astral-sh/uv",
+      "packageNameTemplate": "astral-sh/uv",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    }
+  ],
   "extends": [
     "config:best-practices"
   ],
   "packageRules": [
+    {
+      "matchManagers": ["custom.regex"],
+      "matchPackageNames": ["astral-sh/uv"],
+      "groupName": "uv tool version",
+      "minimumReleaseAge": "7 days"
+    },
     {
       "matchManagers": ["pep621"],
       "matchDepTypes": ["project.dependencies", "build-system.requires"],
