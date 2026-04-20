@@ -16,6 +16,7 @@ import iterm2.tool
 from aiohttp import web
 
 from it2ag.detector import AgentInfo, detect_agents, get_git_info
+from it2ag.session_state import SessionStateTracker
 from it2ag.ui import AGENT_MONITOR_HTML
 
 DEFAULT_PORT = 49152
@@ -30,6 +31,7 @@ class AgentMonitorServer:
         self.connection = connection
         self.port = port
         self._sse_clients: weakref.WeakSet[web.StreamResponse] = weakref.WeakSet()
+        self._session_state = SessionStateTracker()
 
     async def start(self) -> None:
         app = web.Application()
@@ -179,10 +181,13 @@ class AgentMonitorServer:
                 }
             )
 
-        # Sort: agents first (running before idle), then non-agents
+        self._session_state.apply(sessions_info)
+
+        # Sort: running first, then completion-waiting, idle, then non-agents
+        state_priority = {"running": 0, "awaiting_user": 1, "idle": 2}
         sessions_info.sort(
             key=lambda s: (
-                0 if s["agent_state"] == "running" else 1 if s["agent_state"] == "idle" else 2,
+                state_priority.get(str(s["agent_state"]), 3),
                 s["name"],
             )
         )
@@ -193,6 +198,7 @@ class AgentMonitorServer:
         session_id = request.query.get("session", "")
         if not session_id:
             return web.Response(text="no session id", status=400)
+        self._session_state.acknowledge(session_id)
 
         iterm2_app = await iterm2.app.async_get_app(self.connection)
         if iterm2_app is None:

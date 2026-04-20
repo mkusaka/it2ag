@@ -64,6 +64,8 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
   .agent:hover, .agent.focused { background: #383838; }
   .agent.focused { outline: 1px solid #569cd6; }
   .agent.running { border-left-color: #4ec9b0; }
+  .agent.awaiting-user { border-left-color: #d7ba7d; background: #332a1c; }
+  .agent.awaiting-user:hover, .agent.awaiting-user.focused { background: #423520; }
   .agent.idle { border-left-color: #555; }
   .agent-top {
     display: flex;
@@ -72,6 +74,7 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
   }
   .status { font-weight: bold; font-size: 11px; }
   .running .status { color: #4ec9b0; }
+  .awaiting-user .status { color: #d7ba7d; }
   .idle .status { color: #808080; }
   .agent-type {
     font-size: 10px;
@@ -85,6 +88,7 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
   .session-name { color: #d4d4d4; font-size: 11px; margin-top: 2px; }
   .branch { color: #ce9178; font-size: 11px; margin-top: 2px; }
   .path { color: #6a9955; font-size: 10px; margin-top: 1px; }
+  .action-hint { color: #d7ba7d; font-size: 10px; margin-top: 3px; }
   .count {
     font-size: 11px;
     color: #808080;
@@ -224,8 +228,8 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
 
       // Sort groups: groups with running agents first
       const sortedKeys = [...groups.keys()].sort((a, b) => {
-        const aRun = groups.get(a).some(s => s.agent_state === 'running') ? 0 : 1;
-        const bRun = groups.get(b).some(s => s.agent_state === 'running') ? 0 : 1;
+        const aRun = groups.get(a).some(s => statePriority(s.agent_state) <= 1) ? 0 : 1;
+        const bRun = groups.get(b).some(s => statePriority(s.agent_state) <= 1) ? 0 : 1;
         if (aRun !== bRun) return aRun - bRun;
         return a.localeCompare(b);
       });
@@ -243,16 +247,16 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
       container.innerHTML = html;
 
       const running = sessions.filter(s => s.agent_state === 'running').length;
+      const awaiting = sessions.filter(s => s.agent_state === 'awaiting_user').length;
       const withAgent = sessions.filter(s => s.agent_type).length;
       document.getElementById('count').textContent =
-        `${running} running / ${withAgent} agents / ${sessions.length} sessions`;
+        `${running} running / ${awaiting} awaiting / ` +
+        `${withAgent} agents / ${sessions.length} sessions`;
     }
 
     function renderGroup(repoName, repoPath, items) {
       const sessionsHtml = items.map(s => {
-        const cls = s.agent_state === 'running' ? 'running' : 'idle';
-        const icon = s.agent_state === 'running' ? '&#9679;' : '&#9675;';
-        const label = s.agent_state || 'no agent';
+        const meta = stateMeta(s.agent_state);
         const typeBadge = s.agent_type
           ? `<span class="agent-type ${s.agent_type}">${s.agent_type}</span>`
           : '';
@@ -262,15 +266,19 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
         const pathLine = s.path
           ? `<div class="path">${esc(s.path)}</div>`
           : '';
-        return `<div class="agent ${cls}" data-session="${s.id}"
+        const actionHint = s.awaiting_user
+          ? '<div class="action-hint">Click to clear</div>'
+          : '';
+        return `<div class="agent ${meta.cls}" data-session="${s.id}"
                      onclick="focusSession('${s.id}')">
           <div class="agent-top">
-            <span class="status">${icon} ${label}</span>
+            <span class="status">${meta.icon} ${meta.label}</span>
             ${typeBadge}
           </div>
           <div class="session-name">${esc(s.name || '(unnamed)')}</div>
           ${branchLine}
           ${pathLine}
+          ${actionHint}
         </div>`;
       }).join('');
 
@@ -290,9 +298,32 @@ AGENT_MONITOR_HTML = """<!DOCTYPE html>
       return d.innerHTML;
     }
 
+    function statePriority(state) {
+      switch (state) {
+        case 'running': return 0;
+        case 'awaiting_user': return 1;
+        case 'idle': return 2;
+        default: return 3;
+      }
+    }
+
+    function stateMeta(state) {
+      switch (state) {
+        case 'running':
+          return { cls: 'running', icon: '&#9679;', label: 'running' };
+        case 'awaiting_user':
+          return { cls: 'awaiting-user', icon: '&#9670;', label: 'awaiting user' };
+        case 'idle':
+          return { cls: 'idle', icon: '&#9675;', label: 'idle' };
+        default:
+          return { cls: 'idle', icon: '&#9675;', label: state || 'no agent' };
+      }
+    }
+
     async function focusSession(sessionId) {
       try {
         await fetch('/api/focus?session=' + encodeURIComponent(sessionId));
+        await loadSessions();
       } catch(e) {}
     }
 
