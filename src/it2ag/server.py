@@ -97,7 +97,7 @@ class AgentMonitorServer:
 
     async def _monitor_keystroke(self) -> None:
         """Monitor for Cmd+Shift+A to send focus event to WebView via SSE."""
-        pattern = iterm2.keyboard.KeystrokePattern()  # type: ignore[no-untyped-call]
+        pattern = iterm2.keyboard.KeystrokePattern()
         pattern.required_modifiers = [
             iterm2.keyboard.Modifier.COMMAND,
             iterm2.keyboard.Modifier.SHIFT,

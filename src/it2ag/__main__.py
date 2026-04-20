@@ -39,7 +39,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     try:
-        iterm2.run_forever(lambda conn: _run(conn, args.port))  # type: ignore[attr-defined]
+        iterm2.run_forever(lambda conn: _run(conn, args.port))
     except KeyboardInterrupt:
         print("\nit2ag: stopped")
         sys.exit(0)
