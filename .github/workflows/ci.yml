@@ -35,6 +35,7 @@ jobs:
       - run: uv sync --group dev --group release --locked
       - run: uv run pytest
       - run: uv run pyinstaller --clean --noconfirm it2ag.spec
-      - run: test -x ./dist/it2ag
-      - run: ./dist/it2ag --help >/dev/null
-      - run: ./dist/it2ag --version | grep "^it2ag "
+      - run: test -x ./dist/it2ag/it2ag
+      - run: test -d ./dist/it2ag/_internal
+      - run: ./dist/it2ag/it2ag --help >/dev/null
+      - run: ./dist/it2ag/it2ag --version | grep "^it2ag "

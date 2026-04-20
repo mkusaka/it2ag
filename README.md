@@ -25,7 +25,7 @@ Displays a real-time dashboard in iTerm2's Toolbelt sidebar showing all running 
 
 ## Installation
 
-### Homebrew (single binary)
+### Homebrew
 
 ```bash
 brew tap mkusaka/tap
@@ -103,7 +103,7 @@ EOF
 1. Update `version` in `pyproject.toml` and `src/it2ag/__init__.py`.
 2. Commit the release changes and push them to `main`.
 3. Create and push a `vX.Y.Z` tag.
-4. The `Release` workflow builds single-file macOS binaries for Apple Silicon and Intel, publishes them to GitHub Releases, and dispatches a formula update to `mkusaka/homebrew-tap`.
+4. The `Release` workflow builds macOS app directories for Apple Silicon and Intel, publishes them to GitHub Releases, and dispatches a formula update to `mkusaka/homebrew-tap`.
 
 ## How it works
 
@@ -121,7 +121,7 @@ EOF
 ```bash
 uv sync --group dev
 
-# Build local single-file binary
+# Build local app directory
 ./scripts/build-binary.sh
 
 # Lint

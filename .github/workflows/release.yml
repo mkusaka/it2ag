@@ -142,13 +142,14 @@ jobs:
       - name: Build compiled binary
         run: uv run --python 3.10 pyinstaller --clean --noconfirm it2ag.spec
 
-      - name: Smoke test built binary
+      - name: Smoke test built bundle
         env:
           VERSION: ${{ needs.release.outputs.version }}
         run: |
-          test -x ./dist/it2ag
-          ./dist/it2ag --help >/dev/null
-          ./dist/it2ag --version | grep "^it2ag ${VERSION}$"
+          test -x ./dist/it2ag/it2ag
+          test -d ./dist/it2ag/_internal
+          ./dist/it2ag/it2ag --help >/dev/null
+          ./dist/it2ag/it2ag --version | grep "^it2ag ${VERSION}$"
 
       - name: Package release archive
         env:
@@ -158,10 +159,10 @@ jobs:
         run: |
           rm -rf release-root
           mkdir -p release-root
-          cp dist/it2ag release-root/it2ag
+          cp -R dist/it2ag/. release-root/
 
           ASSET_NAME="it2ag-${VERSION}-${ARCHIVE_SUFFIX}.tar.gz"
-          tar -C release-root -czf "$ASSET_NAME" it2ag
+          tar -C release-root -czf "$ASSET_NAME" .
           SHA256=$(shasum -a 256 "$ASSET_NAME" | awk '{print $1}')
 
           {
@@ -178,7 +179,7 @@ jobs:
           }
           EOF
 
-      - name: Smoke test packaged archive
+      - name: Smoke test packaged bundle
         env:
           VERSION: ${{ needs.release.outputs.version }}
         run: |
@@ -186,6 +187,7 @@ jobs:
           mkdir -p smoke-test
           tar -C smoke-test -xzf "$ASSET_NAME"
           test -x ./smoke-test/it2ag
+          test -d ./smoke-test/_internal
           ./smoke-test/it2ag --help >/dev/null
           ./smoke-test/it2ag --version | grep "^it2ag ${VERSION}$"
 
