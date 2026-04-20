@@ -121,6 +121,9 @@ EOF
 ```bash
 uv sync --group dev
 
+# Build local single-file binary
+./scripts/build-binary.sh
+
 # Lint
 uv run ruff check src/ tests/
 uv run ruff format --check src/ tests/
