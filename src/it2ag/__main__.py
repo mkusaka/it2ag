@@ -16,7 +16,7 @@ from it2ag.server import DEFAULT_PORT, AgentMonitorServer
 async def _run(connection: iterm2.connection.Connection, port: int) -> None:
     server = AgentMonitorServer(connection, port=port)
     await server.start()
-    print(f"it2ag: running (http://localhost:{port})")
+    print(f"it2ag: running ({server.url})")
     print("it2ag: Ctrl+C to stop")
 
 
@@ -34,7 +34,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         "--port",
         type=int,
         default=DEFAULT_PORT,
-        help=f"Port for the local web server (default: {DEFAULT_PORT})",
+        help="Port for the local web server (default: auto-select)",
     )
     args = parser.parse_args(argv)
 

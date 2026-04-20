@@ -19,19 +19,43 @@ from it2ag.detector import AgentInfo, detect_agents, get_git_info
 from it2ag.session_state import SessionStateTracker
 from it2ag.ui import AGENT_MONITOR_HTML
 
-DEFAULT_PORT = 49152
+DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = 0
 
 _SHOW_TOOLBELT_ID = iterm2.mainmenu.MainMenu.Toolbelt.SHOW_TOOLBELT.value.identifier
+
+
+def _resolve_bound_port(addresses: list[object]) -> int:
+    ports = {
+        address[1]
+        for address in addresses
+        if isinstance(address, tuple) and len(address) >= 2 and isinstance(address[1], int)
+    }
+    if not ports:
+        raise RuntimeError("it2ag: failed to determine bound port")
+    if len(ports) != 1:
+        raise RuntimeError(f"it2ag: multiple bound ports detected: {sorted(ports)}")
+    return ports.pop()
 
 
 class AgentMonitorServer:
     """Manages the aiohttp server and iTerm2 Toolbelt integration."""
 
-    def __init__(self, connection: iterm2.connection.Connection, port: int = DEFAULT_PORT) -> None:
+    def __init__(
+        self,
+        connection: iterm2.connection.Connection,
+        port: int = DEFAULT_PORT,
+        host: str = DEFAULT_HOST,
+    ) -> None:
         self.connection = connection
+        self.host = host
         self.port = port
         self._sse_clients: weakref.WeakSet[web.StreamResponse] = weakref.WeakSet()
         self._session_state = SessionStateTracker()
+
+    @property
+    def url(self) -> str:
+        return f"http://{self.host}:{self.port}/"
 
     async def start(self) -> None:
         app = web.Application()
@@ -42,15 +66,16 @@ class AgentMonitorServer:
 
         runner = web.AppRunner(app)
         await runner.setup()
-        site = web.TCPSite(runner, "localhost", self.port)
+        site = web.TCPSite(runner, self.host, self.port)
         await site.start()
+        self.port = _resolve_bound_port(runner.addresses)
 
         await iterm2.tool.async_register_web_view_tool(
             self.connection,
             display_name="it2ag",
             identifier="com.mkusaka.it2ag",
             reveal_if_already_registered=True,
-            url=f"http://localhost:{self.port}/",
+            url=self.url,
         )
 
         await self._ensure_toolbelt_visible()

@@ -64,7 +64,7 @@ The Toolbelt panel opens automatically. Click any session to focus it, and click
 
 ```
 --version      Show the installed version and exit
---port PORT    Port for the local web server (default: 49152)
+--port PORT    Port for the local web server (default: auto-select)
 ```
 
 ### Auto-launch on iTerm2 startup
