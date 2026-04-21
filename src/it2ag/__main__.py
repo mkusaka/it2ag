@@ -10,6 +10,7 @@ import iterm2
 import iterm2.connection
 
 from it2ag import __version__
+from it2ag.autolaunch import install_autolaunch
 from it2ag.server import DEFAULT_PORT, AgentMonitorServer
 
 
@@ -36,7 +37,26 @@ def main(argv: Sequence[str] | None = None) -> None:
         default=DEFAULT_PORT,
         help="Port for the local web server (default: auto-select)",
     )
+    parser.add_argument(
+        "--install-autolaunch",
+        action="store_true",
+        help="Install an iTerm2 AutoLaunch wrapper and exit",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite an existing AutoLaunch wrapper when used with --install-autolaunch",
+    )
     args = parser.parse_args(argv)
+
+    if args.force and not args.install_autolaunch:
+        parser.error("--force can only be used with --install-autolaunch")
+
+    if args.install_autolaunch:
+        result = install_autolaunch(force=args.force)
+        action = "installed" if result.changed else "already installed"
+        print(f"it2ag: AutoLaunch wrapper {action} at {result.path} (mode: {result.mode})")
+        return
 
     try:
         iterm2.run_forever(lambda conn: _run(conn, args.port))
