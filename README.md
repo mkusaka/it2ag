@@ -65,38 +65,35 @@ The Toolbelt panel opens automatically. Click any session to focus it, and click
 ```
 --version      Show the installed version and exit
 --port PORT    Port for the local web server (default: auto-select)
+--install-autolaunch
+               Install an iTerm2 AutoLaunch wrapper and exit
+--force        Overwrite an existing AutoLaunch wrapper when used with
+               --install-autolaunch
 ```
 
 ### Auto-launch on iTerm2 startup
 
-Copy or symlink the script to iTerm2's AutoLaunch directory:
+Install the AutoLaunch wrapper with the same command you already use to run `it2ag`:
 
 ```bash
-mkdir -p ~/Library/Application\ Support/iTerm2/Scripts/AutoLaunch
-# Create a wrapper script
-cat > ~/Library/Application\ Support/iTerm2/Scripts/AutoLaunch/it2ag.py << 'EOF'
-import os
-import pathlib
-import shutil
-import subprocess
+# If installed via Homebrew or uvx
+it2ag --install-autolaunch
 
-binary = shutil.which("it2ag")
-if binary is None:
-    for candidate in (
-        "/opt/homebrew/bin/it2ag",
-        "/usr/local/bin/it2ag",
-        os.path.expanduser("~/.local/bin/it2ag"),
-    ):
-        if pathlib.Path(candidate).exists():
-            binary = candidate
-            break
-
-if binary is None:
-    raise SystemExit("it2ag not found. Install it with Homebrew or add it to PATH.")
-
-subprocess.Popen([binary])
-EOF
+# Or from the cloned repo
+uv run it2ag --install-autolaunch
 ```
+
+This writes `~/Library/Application Support/iTerm2/Scripts/AutoLaunch/it2ag.py`.
+If you run setup from a Homebrew-installed `it2ag`, the wrapper resolves
+`it2ag` from `PATH` first, then falls back to common install locations such as
+`/opt/homebrew/bin/it2ag` and `/usr/local/bin/it2ag`.
+
+If you run setup from a cloned repo via `uv run it2ag --install-autolaunch`,
+the wrapper becomes project-aware: it prefers `<repo>/.venv/bin/it2ag`, then
+falls back to `uv --project <repo> run it2ag`.
+
+If `~/Library/Application Support/iTerm2/Scripts/AutoLaunch/it2ag.py` already
+exists and you want `it2ag` to replace it, rerun the command with `--force`.
 
 ## Release
 
