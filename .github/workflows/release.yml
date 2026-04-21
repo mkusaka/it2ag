@@ -227,6 +227,44 @@ jobs:
           pattern: release-metadata-*
           merge-multiple: true
 
+      - name: Render Homebrew formula
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          DARWIN_ARM64_URL=$(jq -r 'select(.archive_suffix == "darwin-arm64") | .asset_url' release-metadata-*.json)
+          DARWIN_ARM64_SHA256=$(jq -r 'select(.archive_suffix == "darwin-arm64") | .sha256' release-metadata-*.json)
+          DARWIN_X64_URL=$(jq -r 'select(.archive_suffix == "darwin-x64") | .asset_url' release-metadata-*.json)
+          DARWIN_X64_SHA256=$(jq -r 'select(.archive_suffix == "darwin-x64") | .sha256' release-metadata-*.json)
+
+          export FORMULA_PATH="$RUNNER_TEMP/it2ag.rb"
+          cp packaging/homebrew/it2ag.rb "$FORMULA_PATH"
+
+          ruby <<'RUBY'
+          path = ENV.fetch("FORMULA_PATH")
+          text = File.read(path)
+
+          replacements = {
+            "__VERSION__" => ENV.fetch("VERSION"),
+            "__DARWIN_ARM64_URL__" => ENV.fetch("DARWIN_ARM64_URL"),
+            "__DARWIN_ARM64_SHA256__" => ENV.fetch("DARWIN_ARM64_SHA256"),
+            "__DARWIN_X64_URL__" => ENV.fetch("DARWIN_X64_URL"),
+            "__DARWIN_X64_SHA256__" => ENV.fetch("DARWIN_X64_SHA256"),
+          }
+
+          replacements.each do |placeholder, replacement|
+            raise "missing placeholder: #{placeholder}" unless text.include?(placeholder)
+
+            text.gsub!(placeholder, replacement)
+          end
+
+          File.write(path, text)
+          RUBY
+
+          ruby -c "$FORMULA_PATH"
+          FORMULA_CONTENTS_B64=$(base64 < "$FORMULA_PATH" | tr -d '\n')
+          echo "FORMULA_CONTENTS_B64=$FORMULA_CONTENTS_B64" >> "$GITHUB_ENV"
+          cat "$FORMULA_PATH"
+
       - name: Dispatch tap update
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
@@ -261,6 +299,7 @@ jobs:
             -f "client_payload[formula]=$FORMULA_NAME" \
             -f "client_payload[repository]=$REPOSITORY_NAME" \
             -f "client_payload[version]=$VERSION" \
+            -f "client_payload[formula_contents_b64]=$FORMULA_CONTENTS_B64" \
             -f "client_payload[darwin_arm64_url]=$DARWIN_ARM64_URL" \
             -f "client_payload[darwin_arm64_sha256]=$DARWIN_ARM64_SHA256" \
             -f "client_payload[darwin_x64_url]=$DARWIN_X64_URL" \
