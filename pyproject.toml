@@ -1,6 +1,6 @@
 [project]
 name = "it2ag"
-version = "0.0.5"
+version = "0.0.6"
 description = "iTerm2 agent monitor for Claude Code and Codex"
 readme = "README.md"
 license = { file = "LICENSE" }
