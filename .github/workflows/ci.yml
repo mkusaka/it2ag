@@ -1,36 +1,43 @@
 name: CI
-
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-
 permissions:
   contents: read
-
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
       - run: uv sync --group dev
       - run: uv run ruff check src/
       - run: uv run ruff format --check src/
-
+    permissions:
+      contents: read
+    timeout-minutes: 60
   typecheck:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
       - run: uv sync --group dev
       - run: uv run mypy src/
-
+    permissions:
+      contents: read
+    timeout-minutes: 60
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
       - run: uv sync --group dev --group release --locked
       - run: uv run pytest
@@ -39,3 +46,6 @@ jobs:
       - run: test -d ./dist/it2ag/_internal
       - run: ./dist/it2ag/it2ag --help >/dev/null
       - run: ./dist/it2ag/it2ag --version | grep "^it2ag "
+    permissions:
+      contents: read
+    timeout-minutes: 60
