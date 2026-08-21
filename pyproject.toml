@@ -33,7 +33,7 @@ release = [
 ]
 
 [tool.uv]
-required-version = "==0.12.4"
+required-version = "==0.12.5"
 exclude-newer = "7 days"
 
 [tool.ruff]
