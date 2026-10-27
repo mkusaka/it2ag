@@ -3,6 +3,9 @@ on:
   push:
     tags:
       - "v*"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 permissions: {}
 jobs:
   verify:
@@ -136,6 +139,7 @@ jobs:
       - name: Smoke test built bundle
         env:
           VERSION: ${{ needs.release.outputs.version }}
+        shell: bash
         run: |
           test -x ./dist/it2ag/it2ag
           test -d ./dist/it2ag/_internal
@@ -146,6 +150,7 @@ jobs:
           VERSION: ${{ needs.release.outputs.version }}
           RELEASE_URL: ${{ needs.release.outputs.release_url }}
           ARCHIVE_SUFFIX: ${{ matrix.archive_suffix }}
+        shell: bash
         run: |
           rm -rf release-root
           mkdir -p release-root
@@ -171,6 +176,7 @@ jobs:
       - name: Smoke test packaged bundle
         env:
           VERSION: ${{ needs.release.outputs.version }}
+        shell: bash
         run: |
           rm -rf smoke-test
           mkdir -p smoke-test
@@ -220,6 +226,7 @@ jobs:
       - name: Render Homebrew formula
         env:
           VERSION: ${{ needs.release.outputs.version }}
+        shell: bash
         run: |
           DARWIN_ARM64_URL=$(jq -r 'select(.archive_suffix == "darwin-arm64") | .asset_url' release-metadata-*.json)
           DARWIN_ARM64_SHA256=$(jq -r 'select(.archive_suffix == "darwin-arm64") | .sha256' release-metadata-*.json)
